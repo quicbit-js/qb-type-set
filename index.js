@@ -14,11 +14,10 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-var next = require('qb-json-next')
 var hmap = require('qb-hmap')
-var TOK = Object.keys(next.TOK).reduce(function (m, n) { m[n] = next.TOK[n]; return m }, {})   // clone tokens
-TOK.MUL = 109       // add a type for multi-types
-var TOK_NAMES = Object.keys(TOK).reduce(function (a, n) { a[TOK[n]] = n.toLowerCase(); return a }, [])
+var tbase = require('qb1-type-base')
+var TCODES = tbase.codes_by_name()
+var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 
 var FIELD_SEED = 398591981
 
@@ -55,10 +54,10 @@ function field_set () {
 var TCODE_FACTOR = 2985923
 var TCOUNT = 0
 
-function Type (hash, col, tok, vals) {
+function Type (hash, col, tcode, vals) {
     this.hash = hash
     this.col = col
-    this.tok = tok
+    this.tcode = tcode
     this.vals = vals
     this.count = ++TCOUNT
 }
@@ -76,9 +75,9 @@ function type_set () {
         function type_hash (args) {
             var h = args[0]
             switch (args[0]) {
-                case TOK.OBJ:
-                case TOK.ARR:
-                case TOK.MUL:
+                case TCODES.obj:
+                case TCODES.arr:
+                case TCODES.mul:
                     h = h * TCODE_FACTOR          // create greater seed difference for object/array/other
                     args[1].for_val(function (v) {
                         h = 0x7FFFFFFF & (h ^ v.hash)
@@ -89,7 +88,7 @@ function type_set () {
             return h
         },
         function type_equal (type, args) {
-            if (type.tok !== args[0]) {
+            if (type.tcode !== args[0]) {
                 return false
             }
 
