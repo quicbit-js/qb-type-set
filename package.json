@@ -1,0 +1,33 @@
+{
+  "name": "qb-type-hash",
+  "version": "1.0.0",
+  "description": "qb-type-hash",
+  "homepage": "https://github.com/quicbit-js/qb-type-hash",
+  "url": "https://github.com/quicbit-js/qb-type-hash/issues",
+  "email": "support@quicbit.com",
+  "repository": "quicbit-js/qb-type-hash",
+  "devDependencies": {
+    "tape": "^4.8.0",
+    "test-kit": "^2.7.2"
+  },
+  "scripts": {
+    "test": "tape test.js",
+    "cov": "tap --coverage-report=html test.js"
+  },
+  "keywords": [
+    "fast",
+    "compact",
+    "minimal",
+    "qb",
+    "qb1",
+    "quicbit",
+    "data",
+    "performance"
+  ],
+  "files": [
+    "index.js",
+    "test.js"
+  ],
+  "author": "Matthew Voss",
+  "license": "ISC"
+}
