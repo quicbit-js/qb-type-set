@@ -14,6 +14,12 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+var next = require('qb-json-next')
+var hmap = require('qb-hmap')
+var TOK = Object.keys(next.TOK).reduce(function (m, n) { m[n] = next.TOK[n]; return m }, {})   // clone tokens
+TOK.MUL = 109       // add a type for multi-types
+var TOK_NAMES = Object.keys(TOK).reduce(function (a, n) { a[TOK[n]] = n.toLowerCase(); return a }, [])
+
 var FIELD_SEED = 398591981
 
 function Field (hash, col, ctx, type) {
