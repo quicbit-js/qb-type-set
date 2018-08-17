@@ -63,7 +63,35 @@ function Type (hash, col, tcode, vals) {
 }
 
 Type.prototype = {
-    constructor: Type
+    constructor: Type,
+    to_obj: function () {
+        var ret
+        switch (this.tcode) {
+            case TCODES.arr:
+                ret = []
+                this.vals.for_val(function (v) {
+                    ret.push(v.to_obj())
+                })
+                break
+            case TCODES.obj:
+                ret = {}
+                this.vals.for_val(function (field) {
+                    ret[field.ctx.toString()] = field.type.to_obj()
+                    // ret[field.ctx.toString() + '(' + field.count + ')'] = type2obj(field.type)
+                })
+                break
+            case TCODES.mul:
+                var mtypes = []
+                this.vals.for_val(function (v) {
+                    mtypes.push(v.to_obj())
+                })
+                ret = mtypes.length === 1 ? mtypes[0] : { $mul: mtypes }
+                break
+            default:
+                ret = TCODE_NAMES[this.tcode]
+        }
+        return ret
+    }
 }
 
 // type args are a [ tcode, values ] tuple, where values depends on the tcode
