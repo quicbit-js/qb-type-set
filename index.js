@@ -16,10 +16,45 @@
 
 var hmap = require('qb-hmap')
 var tbase = require('qb1-type-base')
-var TCODES = tbase.codes_by_name()
+var typeobj = require('qb1-type-obj')
+var TCODES = tbase.codes_by_all_names()
 var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 
 var FIELD_SEED = 398591981
+
+function err (msg) { throw Error(msg) }
+
+function Str (hash, col, s) {
+    this.hash = hash
+    this.col = col
+    this.s = s
+}
+
+Str.prototype = {
+    constructor: Str,
+    to_obj: function () { return this.s },
+    toString: function () { return this.s },
+}
+
+function string_set () {
+    return hmap.key_set(
+        function str_hash (args) {
+            var s = args[0]
+            var h = 0
+            for (var i=0; i < s.length; i++) {
+                h = 0x7FFFFFFF & ((h * 33) ^ s[i])
+            }
+            return h
+        },
+        function str_equal (sobj, args) {
+            return sobj.s === args[0]
+        },
+        function str_create (hash, col, prev, args) {
+            if (prev) { return prev }
+            return new Str(hash, col, args[0])
+        }
+    )
+}
 
 function Field (hash, col, ctx, type) {
     this.hash = hash
@@ -33,7 +68,7 @@ Field.prototype = {
     constructor: Field
 }
 
-// field args are [ ctx, type ] tuple
+// use put_create (ctx, type) to populate
 function field_set () {
     return hmap.key_set(
         function field_hash (args) {
@@ -94,10 +129,11 @@ Type.prototype = {
     }
 }
 
-// type args are a [ tcode, values ] tuple, where values depends on the tcode
-//    objects: hmap of unique fields
-//    arrays: hmap of unique types
-//    other types (STR, BOO, TRU, FAL...): undefined
+// use put_create(tcode, values) to populate where values depends on tcode:
+//    obj: hset of unique fields
+//    arr: hset of unique types
+//    mul: hset of unique types
+//    other (STR, BOO, TRU, FAL...): undefined
 function type_set () {
     return hmap.key_set(
         function type_hash (args) {
@@ -135,9 +171,62 @@ function type_set () {
     )
 }
 
+function obj2type (obj, cache) {
+    cache = cache || {}
+    cache.by_name = cache.by_name || {}
+    cache.all_keys = cache.all_keys || string_set()
+    cache.all_types = cache.all_types || type_set()
+    cache.all_fields = cache.all_fields || field_set()
+
+    var custom_props = { $hash: 'hash', $col: 'col' }
+
+    var info = typeobj.obj2typ(obj, {
+        lookupfn: function (n) {
+            var ret = cache.by_name[n]
+            if (!ret) {
+                var tcode = TCODES[n] || err('no tcode for ' + n)
+                ret = cache.by_name[n] = cache.all_types.put_create(tcode)
+            }
+            return ret
+        },
+        createfn: function (props) {
+            var ret
+            switch (props.base) {
+                case 'obj':
+                    var fields = field_set()
+                    Object.keys(props.obj).forEach(function (k) {
+                        var ctx = cache.all_keys.put_create(k)
+                        var type = props.obj[k]
+                        var field = cache.all_fields.put_create(ctx, type)
+                        fields.put(field)
+                    })
+                    ret = cache.all_types.put_create(TCODES.obj, fields)
+                    break
+                case 'arr':
+                    var arrtypes = type_set()
+                    Object.keys(props.arr).forEach(function (k) { arrtypes.put(props.arr[k]) })
+                    ret = cache.all_types.put_create(TCODES.arr, arrtypes)
+                    break
+                case 'mul':
+                    var mtypes = type_set()
+                    Object.keys(props.obj).forEach(function (k) { mtypes.put(props.arr[k]) })
+                    ret = cache.all_types.put_create(TCODES.arr, mtypes)
+                    break
+                default:
+                    ret = cache.all_types.put_create(props.base)
+            }
+            return ret
+        },
+        custom_props: custom_props,
+    })
+    var ret = info.root.to_obj()
+    return ret
+}
+
 module.exports = {
     // type_map: type_map,
     // field_map: field_map,
+    obj2type: obj2type,
     type_set: type_set,
     field_set: field_set,
 }

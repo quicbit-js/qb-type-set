@@ -15,11 +15,14 @@
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 var test = require('test-kit').tape()
-var mod = require('.')
+var typehash = require('.')
 
-test('something', function (t) {
+test('obj2type', function (t) {
+    var all_types =
     t.table_assert([
-    ], function () {} )
+        [ 'obj',                            'exp' ],
+        [ {a: 'n'},                         { a: 'num' } ],
+        [ {a: 's', b: [ 's', 'i' ] },       { a: 'str', b: [ 'str', 'int' ] } ],
+    ], typehash.obj2type )
 })
-
 
