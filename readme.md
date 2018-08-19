@@ -1,3 +1,3 @@
 # qb-type-set
 
-Fast hashing and sets for qb type objects using qb-hmap
+Support storing qb-types in a fast-lookup (hahsed) set that ignores field order, backed by qb-hmap.
