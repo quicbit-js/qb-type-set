@@ -17,12 +17,39 @@
 var hmap = require('qb-hmap')
 var tbase = require('qb1-type-base')
 var typeobj = require('qb1-type-obj')
+var extend = require('qb-extend-flat')
 var TCODES = tbase.codes_by_all_names()
 var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 
 var FIELD_SEED = 398591981
 
 function err (msg) { throw Error(msg) }
+
+function string_set () {
+    return hmap.hset(
+        function str_hash (args) {
+            var s = args[0]
+            var h = 0
+            for (var i=0; i < s.length; i++) {
+                h = 0x7FFFFFFF & ((h * 33) ^ s[i])
+            }
+            return h
+        },
+
+        function str_equal (sobj, args) {
+            return sobj.s === args[0]
+        },
+
+        function str_create (hash, col, prev, args) {
+            if (prev) { return prev }
+            return new Str(hash, col, args[0])
+        },
+        {
+            str2args_fn: function (s) { return [s] },
+            val2str_fn: function (v) { return v.s }
+        }
+    )
+}
 
 function Str (hash, col, s) {
     this.hash = hash
@@ -32,28 +59,7 @@ function Str (hash, col, s) {
 
 Str.prototype = {
     constructor: Str,
-    to_obj: function () { return this.s },
     toString: function () { return this.s },
-}
-
-function string_set () {
-    return hmap.key_set(
-        function str_hash (args) {
-            var s = args[0]
-            var h = 0
-            for (var i=0; i < s.length; i++) {
-                h = 0x7FFFFFFF & ((h * 33) ^ s[i])
-            }
-            return h
-        },
-        function str_equal (sobj, args) {
-            return sobj.s === args[0]
-        },
-        function str_create (hash, col, prev, args) {
-            if (prev) { return prev }
-            return new Str(hash, col, args[0])
-        }
-    )
 }
 
 function Field (hash, col, ctx, type) {
@@ -70,7 +76,7 @@ Field.prototype = {
 
 // use put_create (ctx, type) to populate
 function field_set () {
-    return hmap.key_set(
+    return hmap.hset(
         function field_hash (args) {
             return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
         },
@@ -112,7 +118,6 @@ Type.prototype = {
                 ret = {}
                 this.vals.for_val(function (field) {
                     ret[field.ctx.toString()] = field.type.to_obj()
-                    // ret[field.ctx.toString() + '(' + field.count + ')'] = type2obj(field.type)
                 })
                 break
             case TCODES.mul:
@@ -135,7 +140,7 @@ Type.prototype = {
 //    mul: hset of unique types
 //    other (STR, BOO, TRU, FAL...): undefined
 function type_set () {
-    return hmap.key_set(
+    return hmap.hset(
         function type_hash (args) {
             var h = args[0]
             switch (args[0]) {
@@ -171,6 +176,40 @@ function type_set () {
     )
 }
 
+function any_key (cache) {
+    if (!cache.ANY_KEY) {
+        cache.ANY_KEY = cache.all_keys.put_s('*')
+    }
+    return cache.ANY_KEY
+}
+
+function any_arr (cache) {
+    if (!cache.ANY_ARR) {
+        var types = type_set()
+        types.put(any_type(cache))
+        cache.ANY_ARR = cache.all_types.put_create(TCODES.arr, types)
+    }
+    return cache.ANY_ARR
+}
+
+function any_obj (cache) {
+    if (!cache.ANY_OBJ) {
+        var types = type_set()
+        types.put(any_type(cache))
+        var fields = field_set()
+        fields.put(cache.all_fields.put_create(any_key(cache), any_type(cache)))
+        cache.ANY_OBJ = cache.all_types.put_create(TCODES.obj, fields)
+    }
+    return cache.ANY_OBJ
+}
+
+function any_type (cache) {
+    if (!cache.ANY_TYPE) {
+        cache.ANY_TYPE = cache.all_types.put_create(TCODES.any)
+    }
+    return cache.ANY_TYPE
+}
+
 function obj2type (obj, cache) {
     cache = cache || {}
     cache.by_name = cache.by_name || {}
@@ -185,7 +224,18 @@ function obj2type (obj, cache) {
             var ret = cache.by_name[n]
             if (!ret) {
                 var tcode = TCODES[n] || err('no tcode for ' + n)
-                ret = cache.by_name[n] = cache.all_types.put_create(tcode)
+                switch (tcode) {
+                    case TCODES.obj:
+                        ret = any_obj(cache)
+                        break
+                    case TCODES.arr:
+                        ret = any_arr(cache)
+                        break
+                    default:
+                        ret = cache.all_types.put_create(tcode)
+
+                }
+                cache.by_name[n] = ret
             }
             return ret
         },
@@ -204,13 +254,13 @@ function obj2type (obj, cache) {
                     break
                 case 'arr':
                     var arrtypes = type_set()
-                    Object.keys(props.arr).forEach(function (k) { arrtypes.put(props.arr[k]) })
+                    props.arr.forEach(function (v) { arrtypes.put(v) })
                     ret = cache.all_types.put_create(TCODES.arr, arrtypes)
                     break
                 case 'mul':
                     var mtypes = type_set()
-                    Object.keys(props.obj).forEach(function (k) { mtypes.put(props.arr[k]) })
-                    ret = cache.all_types.put_create(TCODES.arr, mtypes)
+                    props.mul.forEach(function (v) { mtypes.put(v) })
+                    ret = cache.all_types.put_create(TCODES.mul, mtypes)
                     break
                 default:
                     ret = cache.all_types.put_create(props.base)
@@ -219,8 +269,7 @@ function obj2type (obj, cache) {
         },
         custom_props: custom_props,
     })
-    var ret = info.root.to_obj()
-    return ret
+    return info.root
 }
 
 module.exports = {

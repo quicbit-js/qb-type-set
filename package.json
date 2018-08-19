@@ -32,5 +32,8 @@
     "test.js"
   ],
   "author": "Matthew Voss",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "qb-extend-flat": "^2.0.2"
+  }
 }
