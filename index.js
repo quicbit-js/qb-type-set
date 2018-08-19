@@ -17,7 +17,6 @@
 var hmap = require('qb-hmap')
 var tbase = require('qb1-type-base')
 var typeobj = require('qb1-type-obj')
-var extend = require('qb-extend-flat')
 var TCODES = tbase.codes_by_all_names()
 var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 
@@ -26,7 +25,7 @@ var FIELD_SEED = 398591981
 function err (msg) { throw Error(msg) }
 
 function string_set () {
-    return hmap.hset(
+    return hmap.master(
         function str_hash (args) {
             var s = args[0]
             var h = 0
@@ -76,7 +75,7 @@ Field.prototype = {
 
 // use put_create (ctx, type) to populate
 function field_set () {
-    return hmap.hset(
+    return hmap.master(
         function field_hash (args) {
             return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
         },
@@ -140,7 +139,7 @@ Type.prototype = {
 //    mul: hset of unique types
 //    other (STR, BOO, TRU, FAL...): undefined
 function type_set () {
-    return hmap.hset(
+    return hmap.master(
         function type_hash (args) {
             var h = args[0]
             switch (args[0]) {
@@ -269,6 +268,7 @@ function obj2type (obj, cache) {
         },
         custom_props: custom_props,
     })
+    info.root.vals.freeze()
     return info.root
 }
 
