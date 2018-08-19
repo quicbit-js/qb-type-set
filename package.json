@@ -1,11 +1,11 @@
 {
-  "name": "qb-type-hash",
+  "name": "qb-type-set",
   "version": "1.0.0",
-  "description": "qb-type-hash",
-  "homepage": "https://github.com/quicbit-js/qb-type-hash",
-  "url": "https://github.com/quicbit-js/qb-type-hash/issues",
+  "description": "qb-type-set",
+  "homepage": "https://github.com/quicbit-js/qb-type-set",
+  "url": "https://github.com/quicbit-js/qb-type-set/issues",
   "email": "support@quicbit.com",
-  "repository": "quicbit-js/qb-type-hash",
+  "repository": "quicbit-js/qb-type-set",
   "devDependencies": {
     "qb-hmap": "^1.0.0",
     "qb1-type-base": "^1.0.0",
