@@ -40,20 +40,23 @@ Field.prototype = {
 // use put_create (ctx, type) to populate
 function field_set () {
     return hmap.set({
-            hash_fn: function field_hash (args) {
-                return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
-            },
-            equal_fn: function field_equal (field, args) {
-                return field.ctx === args[0] && field.type === args[1]
-            },
-            create_fn: function field_create (hash, col, prev, args) {
-                if (prev) {
-                    return prev
-                }
-                return new Field(hash, col, args[0], args[1])
+        hash_fn: function field_hash (args) {
+            return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
+        },
+        equal_fn: function field_equal (field, args) {
+            return field.ctx === args[0] && field.type === args[1]
+        },
+        create_fn: function field_create (hash, col, prev, args) {
+            if (prev) {
+                return prev
             }
-        }
-    )
+            return new Field(hash, col, args[0], args[1])
+        },
+        validate_fn: function field_validate (key, val) {
+            key.constructor === Field || err('invalid key: ' + key)
+            val.constructor === Field || err('invalid value: ' + val)
+        },
+    })
 }
 
 var TCODE_FACTOR = 2985923
@@ -64,6 +67,9 @@ function Type (hash, col, tcode, vals) {
     this.col = col
     this.tcode = tcode
     this.vals = vals
+    if (tcode === TCODES.obj) {
+        this.vals.for_val(function (f) { f.constructor === Field || err('invalid object field' )})
+    }
     this.count = ++TCOUNT
 }
 
