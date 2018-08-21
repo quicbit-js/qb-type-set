@@ -59,6 +59,7 @@ function Str (hash, col, s) {
 Str.prototype = {
     constructor: Str,
     toString: function () { return this.s },
+    to_obj: function () { return this.s }
 }
 
 function Field (hash, col, ctx, type) {
@@ -70,7 +71,8 @@ function Field (hash, col, ctx, type) {
 }
 
 Field.prototype = {
-    constructor: Field
+    constructor: Field,
+    to_obj: function () { return { ctx: this.ctx, type: this.type.to_obj() } }
 }
 
 // use put_create (ctx, type) to populate
@@ -268,6 +270,7 @@ function obj2type (obj, cache) {
         },
         custom_props: custom_props,
     })
+    info.root.cache = cache
     info.root.vals.freeze()
     return info.root
 }
