@@ -24,44 +24,6 @@ var FIELD_SEED = 398591981
 
 function err (msg) { throw Error(msg) }
 
-function string_set () {
-    return hmap.master(
-        function str_hash (args) {
-            var s = args[0]
-            var h = 0
-            for (var i=0; i < s.length; i++) {
-                h = 0x7FFFFFFF & ((h * 33) ^ s[i])
-            }
-            return h
-        },
-
-        function str_equal (sobj, args) {
-            return sobj.s === args[0]
-        },
-
-        function str_create (hash, col, prev, args) {
-            if (prev) { return prev }
-            return new Str(hash, col, args[0])
-        },
-        {
-            str2args_fn: function (s) { return [s] },
-            val2str_fn: function (v) { return v.s }
-        }
-    )
-}
-
-function Str (hash, col, s) {
-    this.hash = hash
-    this.col = col
-    this.s = s
-}
-
-Str.prototype = {
-    constructor: Str,
-    toString: function () { return this.s },
-    to_obj: function () { return this.s }
-}
-
 function Field (hash, col, ctx, type) {
     this.hash = hash
     this.col = col
@@ -77,18 +39,19 @@ Field.prototype = {
 
 // use put_create (ctx, type) to populate
 function field_set () {
-    return hmap.master(
-        function field_hash (args) {
-            return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
-        },
-        function field_equal (field, args) {
-            return field.ctx === args[0] && field.type === args[1]
-        },
-        function field_create (hash, col, prev, args) {
-            if (prev) {
-                return prev
+    return hmap.set({
+            hash_fn: function field_hash (args) {
+                return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
+            },
+            equal_fn: function field_equal (field, args) {
+                return field.ctx === args[0] && field.type === args[1]
+            },
+            create_fn: function field_create (hash, col, prev, args) {
+                if (prev) {
+                    return prev
+                }
+                return new Field(hash, col, args[0], args[1])
             }
-            return new Field(hash, col, args[0], args[1])
         }
     )
 }
@@ -141,38 +104,40 @@ Type.prototype = {
 //    mul: hset of unique types
 //    other (STR, BOO, TRU, FAL...): undefined
 function type_set () {
-    return hmap.master(
-        function type_hash (args) {
-            var h = args[0]
-            switch (args[0]) {
-                case TCODES.obj:
-                case TCODES.arr:
-                case TCODES.mul:
-                    h = h * TCODE_FACTOR          // create greater seed difference for object/array/other
-                    args[1].for_val(function (v) {
-                        h = 0x7FFFFFFF & (h ^ v.hash)
-                    })
-                    break
-                // other type hashes are just the tcode
-            }
-            return h
-        },
-        function type_equal (type, args) {
-            if (type.tcode !== args[0]) {
-                return false
-            }
+    return hmap.set(
+        {
+            hash_fn: function type_hash (args) {
+                var h = args[0]
+                switch (args[0]) {
+                    case TCODES.obj:
+                    case TCODES.arr:
+                    case TCODES.mul:
+                        h = h * TCODE_FACTOR          // create greater seed difference for object/array/other
+                        args[1].for_val(function (v) {
+                            h = 0x7FFFFFFF & (h ^ v.hash)
+                        })
+                        break
+                    // other type hashes are just the tcode
+                }
+                return h
+            },
+            equal_fn: function type_equal (type, args) {
+                if (type.tcode !== args[0]) {
+                    return false
+                }
 
-            if (type.vals) {
-                return type.vals.same_hashes(args[1])
-            }
+                if (type.vals) {
+                    return type.vals.same_hashes(args[1])
+                }
 
-            return true
-        },
-        function type_create (hash, col, prev, args) {
-            if (prev) {
-                return prev
+                return true
+            },
+            create_fn: function type_create (hash, col, prev, args) {
+                if (prev) {
+                    return prev
+                }
+                return new Type(hash, col, args[0], args[1])
             }
-            return new Type(hash, col, args[0], args[1])
         }
     )
 }
@@ -212,9 +177,15 @@ function any_type (cache) {
 }
 
 function obj2type (obj, cache) {
+    var info = obj2type_info(obj, cache)
+    Object.keys(info.unresolved).length === 0 || err('unresolved types: ' + JSON.stringify(info.unresolved))
+    return info.root
+}
+
+function obj2type_info (obj, cache) {
     cache = cache || {}
     cache.by_name = cache.by_name || {}
-    cache.all_keys = cache.all_keys || string_set()
+    cache.all_keys = cache.all_keys || hmap.string_set()
     cache.all_types = cache.all_types || type_set()
     cache.all_fields = cache.all_fields || field_set()
 
@@ -270,15 +241,15 @@ function obj2type (obj, cache) {
         },
         custom_props: custom_props,
     })
-    info.root.cache = cache
-    info.root.vals.freeze()
-    return info.root
+    info.cache = cache
+    return info
 }
 
 module.exports = {
     // type_map: type_map,
     // field_map: field_map,
     obj2type: obj2type,
+    obj2type_info: obj2type_info,
     type_set: type_set,
     field_set: field_set,
 }

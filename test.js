@@ -17,11 +17,21 @@
 var test = require('test-kit').tape()
 var tset = require('.')
 
+function err (msg) { throw Error(msg) }
+
+function check_collisions (cache) {
+    var sets = ['all_keys', 'all_types', 'all_fields']
+    sets.forEach(function (s) {
+        var collisions = cache[s].collisions()
+        collisions.length === 0 || err('unexpected collisions in cache.' + s)
+    })
+}
+
 test('obj2type', function (t) {
     t.table_assert([
         [ 'obj',                                            'exp' ],
-        [ [ {x: {a:'n',b:'s'}}, {x: {a:'n',b:'s',x:'s'}} ], [ {x: {a:'num',b:'str'}}, {x: {a:'num',b:'str',x:'str'}} ] ],
-        [ { a: 'n' },                                       { a: 'num' } ],
+        // [ [ {x: {a:'n',b:'s'}}, {x: {a:'n',b:'s',x:'s'}} ], [ {x: {a:'num',b:'str'}}, {x: {a:'num',b:'str',x:'str'}} ] ],
+        // [ { a: 'n' },                                       { a: 'num' } ],
         [ { a: 's', b: ['s', 'i'] },                        { a: 'str', b: ['str', 'int'] } ],
         [ [ {a: 's'}, {a: 's'} ],                           [ {a: 'str'} ] ],
         [ [ {a: 's'}, {a: 'n'} ],                           [ {a: 'str'}, {a: 'num'} ] ],
@@ -31,8 +41,9 @@ test('obj2type', function (t) {
         [ [ {$m: ['s','n']}, 'a' ],                         [ {$mul: ['str','num']}, ['*'] ] ],
         [ [ {$m: ['s','n']}, ['o'] ],                       [ {$mul: ['str','num']}, [{'*':'*'}] ] ],
     ], function (obj) {
-        var type = tset.obj2type(obj)
-        return type.to_obj()
+        var info = tset.obj2type_info(obj)
+        check_collisions (info.cache)
+        return info.root.to_obj()
     } )
 })
 
