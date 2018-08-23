@@ -34,7 +34,11 @@ function Field (hash, col, ctx, type) {
 
 Field.prototype = {
     constructor: Field,
-    to_obj: function () { return { ctx: this.ctx, type: this.type.to_obj() } }
+    to_obj: function () {
+        var ret = {}
+        ret[this.ctx.to_obj()] = this.type.to_obj()
+        return ret
+    }
 }
 
 // use put_create (ctx, type) to populate
