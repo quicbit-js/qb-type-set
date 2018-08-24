@@ -30,7 +30,7 @@ function check_collisions (cache) {
     })
 }
 
-test.only('obj2type', function (t) {
+test('obj2type', function (t) {
     t.table_assert([
         [ 'obj',                                            'exp' ],
         [ [ {$m: ['s','n']}, 'a' ],                         [ {$mul: ['str','num']}, [] ] ],
@@ -51,7 +51,7 @@ test.only('obj2type', function (t) {
     } )
 })
 
-test('obj2type - multi', function (t) {
+test('obj2type - uncombined fields', function (t) {
     var all_keys = hmap.string_set()
     var all_types = tset.type_set()
     var all_fields = tset.field_set()
@@ -66,7 +66,30 @@ test('obj2type - multi', function (t) {
     fields.put(all_fields.put_create(a_ctx, num_t))
 
     var multi = all_types.put_create(TCODES.obj, fields)
-    t.same(multi.to_obj(), { a: { $mul: [ 'str', 'num' ] } })
+    t.throws(function () {multi.to_obj()}, /uncombined fields/ )
 
     t.end()
+})
+
+test('find_df', function (t) {
+    var find_fn = function (args) {
+        return function (t) {
+            return t.tcode === TCODES[args.tname]
+        }
+    }
+
+    t.table_assert([
+        [ 'obj',                                 'find_args',    'exp' ],
+        [ 's',                                   { tname: 's' }, null ],
+        [ { a: 's' },                            { tname: 's' }, [ 'a' ] ],
+        [ { a: ['s'] },                          { tname: 's' }, [ 'a', 0 ] ],
+        [ { a: ['n', 's'] },                     { tname: 's' }, [ 'a', 1 ] ],
+        [ { a: {$mul: ['n','s']} },              { tname: 's' }, [ 'a', 1 ] ],
+        [ { a: {$mul: ['n','s']} },              { tname: 'n' }, [ 'a', 0 ] ],
+        [ { a: {$mul: ['n','s']} },              { tname: 'b' }, null ],
+        [ { a: ['s', {$mul:['n','s']}, ['b']] }, { tname: 'b' }, [ 'a', 2, 0 ] ],
+    ], function (obj, find_args) {
+        var type = tset.obj2type(obj)
+        return type.find_df(find_fn(find_args))
+    })
 })

@@ -20,6 +20,7 @@ var typeobj = require('qb1-type-obj')
 var TCODES = tbase.codes_by_all_names()
 var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 
+var HALT = hmap.HALT
 var FIELD_SEED = 398591981
 
 function err (msg) { throw Error(msg) }
@@ -91,6 +92,43 @@ function validate_obj_fields (fields) {
 
 var TCOUNT = 0
 
+function find_df (parent, fn, path) {
+    var found = null
+    switch (parent.tcode) {
+        case TCODES.mul:
+            parent.vals.for_val(function (child, i) {
+                path.push(i)
+                if(fn(child) || find_df(child, fn, path)) {
+                    found = true
+                    return HALT
+                }
+                path.pop()
+            })
+            break
+        case TCODES.arr:
+            parent.vals.for_val(function (child, i) {
+                path.push(i)
+                if(fn(child) || find_df(child, fn, path)) {
+                    found = true
+                    return HALT
+                }
+                path.pop()
+            })
+            break
+        case TCODES.obj:
+            parent.vals.for_val(function (field) {
+                path.push(field.ctx.toString())
+                if(fn(field.type) || find_df(field.type, fn, path)) {
+                    found = true
+                    return HALT
+                }
+                path.pop()
+            })
+            break
+    }
+    return found ? path : null
+}
+
 function Type (hash, col, tcode, vals) {
     this.hash = hash
     this.col = col
@@ -102,6 +140,14 @@ function Type (hash, col, tcode, vals) {
 
 Type.prototype = {
     constructor: Type,
+    HALT: HALT,
+
+    // perform depth-first search on all children of this type,
+    // applying fn (t) to all children and stopping upon truthy result - returns
+    // an array path to the found node or null if not found
+    find_df: function (fn) {
+        return find_df(this, fn, [])
+    },
     is_empty: function () {
         return this.vals && this.vals.length === 0
     },
@@ -299,4 +345,5 @@ module.exports = {
     obj2type_info: obj2type_info,
     type_set: type_set,
     field_set: field_set,
+    HALT: HALT,
 }
