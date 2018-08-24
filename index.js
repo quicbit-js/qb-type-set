@@ -63,7 +63,6 @@ function field_set () {
     })
 }
 
-var TCODE_FACTOR = 2985923
 var TCOUNT = 0
 
 function Type (hash, col, tcode, vals) {
@@ -108,6 +107,9 @@ Type.prototype = {
     }
 }
 
+var TCODE_FACTOR = 2985921
+var EMPTY_FACTOR = 402537
+
 // use put_create(tcode, values) to populate where values depends on tcode:
 //    obj: hset of unique fields
 //    arr: hset of unique types
@@ -123,9 +125,13 @@ function type_set () {
                     case TCODES.arr:
                     case TCODES.mul:
                         h = h * TCODE_FACTOR          // create greater seed difference for object/array/other
-                        args[1].for_val(function (v) {
-                            h = 0x7FFFFFFF & (h ^ v.hash)
-                        })
+                        if (args[1].length) {
+                            args[1].for_val(function (v) {
+                                h = 0x7FFFFFFF & (h ^ v.hash)
+                            })
+                        } else {
+                            h *= EMPTY_FACTOR       // distance empty sets from containers of empty sets
+                        }
                         break
                     // other type hashes are just the tcode
                 }
@@ -161,8 +167,8 @@ function any_key (cache) {
 
 function any_arr (cache) {
     if (!cache.ANY_ARR) {
-        var types = type_set()
-        types.put(any_type(cache))
+        var types = cache.all_types.hset()
+        // types.put(any_type(cache))
         cache.ANY_ARR = cache.all_types.put_create(TCODES.arr, types)
     }
     return cache.ANY_ARR
@@ -170,10 +176,10 @@ function any_arr (cache) {
 
 function any_obj (cache) {
     if (!cache.ANY_OBJ) {
-        var types = type_set()
-        types.put(any_type(cache))
-        var fields = field_set()
-        fields.put(cache.all_fields.put_create(any_key(cache), any_type(cache)))
+        var fields = cache.all_fields.hset()
+        // types.put(any_type(cache))
+        // var fields = field_set()
+        // fields.put(cache.all_fields.put_create(any_key(cache), any_type(cache)))
         cache.ANY_OBJ = cache.all_types.put_create(TCODES.obj, fields)
     }
     return cache.ANY_OBJ
@@ -225,7 +231,7 @@ function obj2type_info (obj, cache) {
             var ret
             switch (props.base) {
                 case 'obj':
-                    var fields = field_set()
+                    var fields = cache.all_fields.hset()
                     Object.keys(props.obj).forEach(function (k) {
                         var ctx = cache.all_keys.put_create(k)
                         var type = props.obj[k]
@@ -235,12 +241,12 @@ function obj2type_info (obj, cache) {
                     ret = cache.all_types.put_create(TCODES.obj, fields)
                     break
                 case 'arr':
-                    var arrtypes = type_set()
+                    var arrtypes = cache.all_types.hset()
                     props.arr.forEach(function (v) { arrtypes.put(v) })
                     ret = cache.all_types.put_create(TCODES.arr, arrtypes)
                     break
                 case 'mul':
-                    var mtypes = type_set()
+                    var mtypes = cache.all_types.hset()
                     props.mul.forEach(function (v) { mtypes.put(v) })
                     ret = cache.all_types.put_create(TCODES.mul, mtypes)
                     break
