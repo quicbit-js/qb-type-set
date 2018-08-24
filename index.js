@@ -56,11 +56,37 @@ function field_set () {
             }
             return new Field(hash, col, args[0], args[1])
         },
-        validate_fn: function field_validate (key, val) {
-            key.constructor === Field || err('invalid key: ' + key)
+        validate_fn: function field_validate (val) {
             val.constructor === Field || err('invalid value: ' + val)
         },
     })
+}
+
+function validate_type (tcode, vals) {
+    typeof tcode === 'number' || err('bad tcode')
+    if (tcode === TCODES.obj) {
+        validate_obj_fields(vals)
+    }
+}
+
+// todo: consider using an indexed hmap for obj.vals instead of a set of fields (hash key and val)
+function validate_obj_fields (fields) {
+    if (fields.length === 0) {
+        return
+    }
+    var all_fields = fields.master
+    var all_keys = all_fields.map.key_set
+
+    // var all_types = all_fields.
+    var contexts = all_keys.hset()
+    fields.for_val(function (f) {
+        f.constructor === Field || err('invalid object field' )
+        if (contexts.get(f.ctx)) {
+            err('multiple for context: ' + f.ctx.toString())
+        }
+        contexts.put(f.ctx)
+    })
+
 }
 
 var TCOUNT = 0
@@ -70,14 +96,15 @@ function Type (hash, col, tcode, vals) {
     this.col = col
     this.tcode = tcode
     this.vals = vals
-    if (tcode === TCODES.obj) {
-        this.vals.for_val(function (f) { f.constructor === Field || err('invalid object field' )})
-    }
+    // validate_type(tcode, vals)
     this.count = ++TCOUNT
 }
 
 Type.prototype = {
     constructor: Type,
+    is_empty: function () {
+        return this.vals && this.vals.length === 0
+    },
     to_obj: function () {
         var ret
         switch (this.tcode) {
@@ -90,7 +117,11 @@ Type.prototype = {
             case TCODES.obj:
                 ret = {}
                 this.vals.for_val(function (field) {
-                    ret[field.ctx.toString()] = field.type.to_obj()
+                    var key = field.ctx.toString()
+                    var val = field.type.to_obj()
+                    // todo: consider using obj hmap instead
+                    ret[key] == null || err('uncombined fields: ' + key + '  Should use a multi-type instead')
+                    ret[key] = val
                 })
                 break
             case TCODES.mul:

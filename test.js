@@ -14,7 +14,10 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+var hmap = require('qb-hmap')
 var test = require('test-kit').tape()
+var tbase = require('qb1-type-base')
+var TCODES = tbase.codes_by_all_names()
 var tset = require('.')
 
 function err (msg) { throw Error(msg) }
@@ -27,7 +30,7 @@ function check_collisions (cache) {
     })
 }
 
-test('obj2type', function (t) {
+test.only('obj2type', function (t) {
     t.table_assert([
         [ 'obj',                                            'exp' ],
         [ [ {$m: ['s','n']}, 'a' ],                         [ {$mul: ['str','num']}, [] ] ],
@@ -48,3 +51,22 @@ test('obj2type', function (t) {
     } )
 })
 
+test('obj2type - multi', function (t) {
+    var all_keys = hmap.string_set()
+    var all_types = tset.type_set()
+    var all_fields = tset.field_set()
+
+    var str_t = all_types.put_create(TCODES.str)
+    var num_t = all_types.put_create(TCODES.num)
+
+    var a_ctx = all_keys.put_create('a')
+    var fields = all_types.hset()
+
+    fields.put(all_fields.put_create(a_ctx, str_t))
+    fields.put(all_fields.put_create(a_ctx, num_t))
+
+    var multi = all_types.put_create(TCODES.obj, fields)
+    t.same(multi.to_obj(), { a: { $mul: [ 'str', 'num' ] } })
+
+    t.end()
+})
