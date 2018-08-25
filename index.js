@@ -174,14 +174,13 @@ function update (parent, fn, path, cache) {
             break
         case TCODES.obj:
             parent.vals.for_val(function (field, i) {
-                var ctx = field.ctx.toString()
-                path.push(ctx)
+                path.push(field.ctx.toString())
                 var new_c = update(field.type, fn, path, cache)
                 if (new_c !== field.type) {
                     modified = true
                 }
                 if (new_c) {            // is deleted for falsey return
-                    new_vals.push([ctx, new_c])
+                    new_vals.push([field.ctx, new_c])
                 }
                 path.pop()
             })
