@@ -14,6 +14,7 @@
 // ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
+var tformat = require('qb-type-format')
 var hmap = require('qb-hmap')
 var tbase = require('qb1-type-base')
 var typeobj = require('qb1-type-obj')
@@ -23,7 +24,33 @@ var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n;
 var HALT = hmap.HALT
 var FIELD_SEED = 398591981
 
+function log () {
+    var args = Array.prototype.slice.call(arguments).map(function (v) { return format_arg(v) })
+    console.log.apply(console, args)
+}
+
 function err (msg) { throw Error(msg) }
+
+function format_arg (arg) {
+    if (arg == null) {
+        return arg
+    }
+    switch (typeof arg) {
+        case 'object':
+            if (Array.isArray(arg)) {
+                return '[' + arg.map(function (v) { return format_arg(v) }).join(', ') + ']'
+            }
+            if (typeof arg.to_obj === 'function') {
+                return JSON.stringify(tformat(arg.to_obj()))
+            }
+            return JSON.stringify(tformat(arg))
+        case 'string':
+            return arg
+        default:
+            return arg
+    }
+
+}
 
 function Field (hash, col, ctx, type) {
     this.hash = hash
@@ -95,20 +122,10 @@ var TCOUNT = 0
 function find_df (parent, fn, path) {
     var found = null
     switch (parent.tcode) {
-        case TCODES.mul:
+        case TCODES.mul: case TCODES.arr:
             parent.vals.for_val(function (child, i) {
                 path.push(i)
-                if(fn(child) || find_df(child, fn, path)) {
-                    found = true
-                    return HALT
-                }
-                path.pop()
-            })
-            break
-        case TCODES.arr:
-            parent.vals.for_val(function (child, i) {
-                path.push(i)
-                if(fn(child) || find_df(child, fn, path)) {
+                if(fn(child, path) || find_df(child, fn, path)) {
                     found = true
                     return HALT
                 }
@@ -118,7 +135,7 @@ function find_df (parent, fn, path) {
         case TCODES.obj:
             parent.vals.for_val(function (field) {
                 path.push(field.ctx.toString())
-                if(fn(field.type) || find_df(field.type, fn, path)) {
+                if(fn(field.type, path) || find_df(field.type, fn, path)) {
                     found = true
                     return HALT
                 }
@@ -127,6 +144,67 @@ function find_df (parent, fn, path) {
             break
     }
     return found ? path : null
+}
+
+function update (parent, fn, path, cache) {
+    var new_p = fn(parent, path)
+    if (new_p !== parent) {
+        return new_p
+    }
+
+    // update children
+    if (!parent.vals) {
+        return parent
+    }
+    var new_vals = []
+    var modified = false
+    switch (parent.tcode) {
+        case TCODES.mul: case TCODES.arr:
+            parent.vals.for_val(function (child, i) {
+                path.push(i)
+                var new_c = update(child, fn, path, cache)
+                if (new_c !== child) {
+                    modified = true
+                }
+                if (new_c) {            // deleted for falsey return
+                    new_vals.push(new_c)
+                }
+                path.pop()
+            })
+            break
+        case TCODES.obj:
+            parent.vals.for_val(function (field, i) {
+                var ctx = field.ctx.toString()
+                path.push(ctx)
+                var new_c = update(field.type, fn, path, cache)
+                if (new_c !== field.type) {
+                    modified = true
+                }
+                if (new_c) {            // is deleted for falsey return
+                    new_vals.push([ctx, new_c])
+                }
+                path.pop()
+            })
+            break
+    }
+    return modified ? create_new(parent.tcode, new_vals, cache) : parent
+}
+
+function create_new(tcode, new_vals, cache) {
+    var create_args
+    switch (tcode) {
+        case TCODES.mul: case TCODES.arr:
+            create_args = cache.all_types.hset()
+            create_args.put_all(new_vals)
+            break
+        case TCODES.obj:
+            create_args = cache.all_fields.hset()
+            new_vals.forEach(function (ctx_type) {
+                create_args.put(cache.all_fields.put_create(ctx_type[0], ctx_type[1]))
+            })
+            break
+    }
+    return cache.all_types.put_create(tcode, create_args)
 }
 
 function Type (hash, col, tcode, vals) {
@@ -147,6 +225,11 @@ Type.prototype = {
     // an array path to the found node or null if not found
     find_df: function (fn) {
         return find_df(this, fn, [])
+    },
+    remove_all: function (fn, cache) {
+        return update(this, function (parent, path) {
+            return fn(parent, path) ? null : parent
+        }, [], cache)
     },
     is_empty: function () {
         return this.vals && this.vals.length === 0
@@ -341,6 +424,7 @@ function obj2type_info (obj, cache) {
 module.exports = {
     // type_map: type_map,
     // field_map: field_map,
+    log: log,
     obj2type: obj2type,
     obj2type_info: obj2type_info,
     type_set: type_set,

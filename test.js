@@ -93,3 +93,28 @@ test('find_df', function (t) {
         return type.find_df(find_fn(find_args))
     })
 })
+
+test('remove_all', function (t) {
+    var find_fn = function (args) {
+        return function (t) {
+            return t.tcode === TCODES[args.tname]
+        }
+    }
+
+    t.table_assert([
+        [ 'obj',                                 'find_args',    'exp' ],
+        [ 's',                                   { tname: 's' }, null ],
+        [ { a: 's' },                            { tname: 's' }, {} ],
+        [ { a: ['s'] },                          { tname: 's' }, { a: [] } ],
+        [ { a: ['n', 's'] },                     { tname: 's' }, { a: ['num'] } ],
+        [ { a: {$mul: ['n','s']} },              { tname: 's' }, { a: 'num' } ],
+        [ { a: {$mul: ['n','s']} },              { tname: 'n' }, { a: 'str' } ],
+        [ { a: {$mul: ['n','s']} },              { tname: 'b' }, { a: {$mul: ['num','str']} } ],
+        [ { a: ['s', {$mul:['n','s']}, ['b']] }, { tname: 'b' }, { a: ['str', {$mul:['num','str']}, []] } ],
+        [ { a: ['s', {$mul:['n','s']}, ['b']] }, { tname: 's' }, { a: [ 'num', [ 'boo' ] ] } ],
+    ], function (obj, find_args) {
+        var info = tset.obj2type_info(obj)
+        var ret = info.root.remove_all(find_fn(find_args), info.cache)
+        return ret && ret.to_obj()
+    })
+})

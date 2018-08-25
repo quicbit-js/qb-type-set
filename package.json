@@ -9,6 +9,7 @@
   "devDependencies": {
     "qb-hmap": "^1.0.0",
     "qb1-type-base": "^1.0.0",
+    "qb-type-format": "^1.0.0",
     "qb1-type-obj": "^1.0.0",
     "tape": "^4.9.1",
     "test-kit": "^2.7.2"
