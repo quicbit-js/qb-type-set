@@ -297,6 +297,10 @@ function type_set () {
                 return h
             },
             equal_fn: function type_equal (type, args) {
+                // if (type.col > 3) {
+                //     // setting a breakpoint here is one way to inspect very large parsing jobs with collision problems
+                //     console.log('collisions', type.col)
+                // }
                 if (type.tcode !== args[0]) {
                     return false
                 }
