@@ -321,12 +321,12 @@ function type_set () {
     )
 }
 
-function any_key (cache) {
-    if (!cache.ANY_KEY) {
-        cache.ANY_KEY = cache.all_keys.put_s('*')
-    }
-    return cache.ANY_KEY
-}
+// function any_key (cache) {
+//     if (!cache.ANY_KEY) {
+//         cache.ANY_KEY = cache.all_keys.put_s('*')
+//     }
+//     return cache.ANY_KEY
+// }
 
 function any_arr (cache) {
     if (!cache.ANY_ARR) {
@@ -348,12 +348,12 @@ function any_obj (cache) {
     return cache.ANY_OBJ
 }
 
-function any_type (cache) {
-    if (!cache.ANY_TYPE) {
-        cache.ANY_TYPE = cache.all_types.put_create(TCODES.any)
-    }
-    return cache.ANY_TYPE
-}
+// function any_type (cache) {
+//     if (!cache.ANY_TYPE) {
+//         cache.ANY_TYPE = cache.all_types.put_create(TCODES.any)
+//     }
+//     return cache.ANY_TYPE
+// }
 
 function obj2type (obj, cache) {
     var info = obj2type_info(obj, cache)
