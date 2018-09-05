@@ -356,7 +356,6 @@ function type_set (opt) {
                 //         err("HERE")
                 //     }
                 // }
-
                 return new Type(hash, col, args[0], args[1])
             },
             // let null turn off validations
@@ -471,7 +470,8 @@ function obj2type_info (obj, cache) {
                     ret = cache.all_types.put_create(TCODES.obj, fields)
                     break
                 case 'arr':
-                    // consider using cycle0 to normalize arrays
+                    // I considered consolidating array values here, but that
+                    // can corrupt cycles like [ n, s, n ] -> [ n, s ]... not the same
                     ret = cache.all_types.put_create(TCODES.arr, props.arr)
                     break
                 case 'mul':
