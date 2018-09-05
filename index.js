@@ -24,13 +24,14 @@ var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n;
 var HALT = hmap.HALT
 var FIELD_SEED = 398591981
 
+var LOG_COUNT = 0
 function log () {
     var args = Array.prototype.slice.call(arguments).map(function (v) { return format_arg(v) })
+    args.unshift((LOG_COUNT++) + ': ')
     console.log.apply(console, args)
 }
 
 function err (msg) { throw Error(msg) }
-
 function format_arg (arg) {
     if (arg == null) {
         return arg
@@ -60,6 +61,10 @@ function Field (hash, col, ctx, type) {
     this.count = 0
 }
 
+function validate_field (f) {
+
+}
+
 Field.prototype = {
     constructor: Field,
     to_obj: function () {
@@ -70,7 +75,8 @@ Field.prototype = {
 }
 
 // use put_create (ctx, type) to populate
-function field_set () {
+function field_set (opt) {
+    opt = opt || {}
     return hmap.set({
         hash_fn: function field_hash (args) {
             return FIELD_SEED + (0x7FFFFFFF & ((args[0].hash * 33) * args[1].hash))
@@ -84,33 +90,46 @@ function field_set () {
             }
             return new Field(hash, col, args[0], args[1])
         },
-        validate_fn: function field_validate (val) {
-            val.constructor === Field || err('invalid value: ' + val)
-        },
+        validate_fn: opt.validate_fn === undefined ? validate_field : opt.validate_fn,
+        validate_args_fn: opt.validate_args_fn
     })
 }
 
-function validate_type (tcode, vals) {
+function validate_type (t) {
+    t.constructor.name === Type || err('invalid type ' + t)
+}
+
+function validate_type_args (args) {
+    var tcode = args[0]
+    var vals = args[1]
     typeof tcode === 'number' || err('bad tcode')
-    if (tcode === TCODES.obj) {
-        validate_obj_fields(vals)
+    switch (tcode) {
+        case TCODES.obj:
+            validate_obj_vals(vals)
+            break
+        case TCODES.arr:
+            validate_arr_vals(vals)
+            break
     }
 }
 
+function validate_arr_vals (vals) {
+    Array.isArray(vals) || err('expected array vals to be an array')
+}
+
 // todo: consider using an indexed hmap for obj.vals instead of a set of fields (hash key and val)
-function validate_obj_fields (fields) {
+function validate_obj_vals (fields) {
     if (fields.length === 0) {
         return
     }
     var all_fields = fields.master
     var all_keys = all_fields.map.key_set
 
-    // var all_types = all_fields.
     var contexts = all_keys.hset()
     fields.for_val(function (f) {
         f.constructor === Field || err('invalid object field' )
         if (contexts.get(f.ctx)) {
-            err('multiple for context: ' + f.ctx.toString())
+            err('uncombined fields for context: ' + f.ctx.toString())
         }
         contexts.put(f.ctx)
     })
@@ -123,7 +142,7 @@ function find_df (parent, fn, path) {
     var found = null
     switch (parent.tcode) {
         case TCODES.mul: case TCODES.arr:
-            parent.vals.for_val(function (child, i) {
+            for_val(parent.vals, function (child, i) {
                 path.push(i)
                 if(fn(child, path) || find_df(child, fn, path)) {
                     found = true
@@ -160,7 +179,7 @@ function update (parent, fn, path, cache) {
     var modified = false
     switch (parent.tcode) {
         case TCODES.mul: case TCODES.arr:
-            parent.vals.for_val(function (child, i) {
+            for_val(parent.vals, function (child, i) {
                 path.push(i)
                 var new_c = update(child, fn, path, cache)
                 if (new_c !== child) {
@@ -173,7 +192,7 @@ function update (parent, fn, path, cache) {
             })
             break
         case TCODES.obj:
-            parent.vals.for_val(function (field, i) {
+            for_val(parent.vals, function (field, i) {
                 path.push(field.ctx.toString())
                 var new_c = update(field.type, fn, path, cache)
                 if (new_c !== field.type) {
@@ -192,7 +211,13 @@ function update (parent, fn, path, cache) {
 function create_new(tcode, new_vals, cache) {
     var create_args
     switch (tcode) {
-        case TCODES.mul: case TCODES.arr:
+        case TCODES.arr:
+            create_args = new_vals
+            break
+        case TCODES.mul:
+            if (new_vals.length === 1) {
+                return new_vals[0]
+            }
             create_args = cache.all_types.hset()
             create_args.put_all(new_vals)
             break
@@ -211,7 +236,6 @@ function Type (hash, col, tcode, vals) {
     this.col = col
     this.tcode = tcode
     this.vals = vals
-    // validate_type(tcode, vals)
     this.count = ++TCOUNT
 }
 
@@ -238,18 +262,14 @@ Type.prototype = {
         switch (this.tcode) {
             case TCODES.arr:
                 ret = []
-                this.vals.for_val(function (v) {
+                for_val(this.vals, function (v) {
                     ret.push(v.to_obj())
                 })
                 break
             case TCODES.obj:
                 ret = {}
                 this.vals.for_val(function (field) {
-                    var key = field.ctx.toString()
-                    var val = field.type.to_obj()
-                    // todo: consider using obj hmap instead
-                    ret[key] == null || err('uncombined fields: ' + key + '  Should use a multi-type instead')
-                    ret[key] = val
+                    ret[field.ctx.toString()] = field.type.to_obj()
                 })
                 break
             case TCODES.mul:
@@ -269,27 +289,40 @@ Type.prototype = {
 var TCODE_FACTOR = 2985921
 var EMPTY_FACTOR = 402537
 
+var for_val = hmap.for_val
+
 // use put_create(tcode, values) to populate where values depends on tcode:
 //    obj: hset of unique fields
-//    arr: hset of unique types
+//    arr: array of cycling types, i.e. [ n, s ] means [ n, s, n, s, ... ]
 //    mul: hset of unique types
 //    other (STR, BOO, TRU, FAL...): undefined
-function type_set () {
+function type_set (opt) {
+    opt = opt || {}
     return hmap.set(
         {
             hash_fn: function type_hash (args) {
                 var h = args[0]
                 switch (args[0]) {
-                    case TCODES.obj:
                     case TCODES.arr:
-                    case TCODES.mul:
-                        h = h * TCODE_FACTOR          // create greater seed difference for object/array/other
+                        h = h * TCODE_FACTOR                // create greater seed difference for object/array/other
                         if (args[1].length) {
-                            args[1].for_val(function (v) {
-                                h = 0x7FFFFFFF & (h ^ v.hash)
+                            for_val(args[1], function (v) {
+                                h = 0x7FFFFFFF & ((h * 33) ^ v.hash)        // xor - by berstein (order matters)
                             })
                         } else {
-                            h *= EMPTY_FACTOR       // distance empty sets from containers of empty sets
+                            h *= EMPTY_FACTOR               // distance empty sets from containers of empty sets
+                        }
+                        break
+                        break
+                    case TCODES.obj:
+                    case TCODES.mul:
+                        h = h * TCODE_FACTOR                // create greater seed difference for object/array/other
+                        if (args[1].length) {
+                            for_val(args[1], function (v) {
+                                h = 0x7FFFFFFF & (h ^ v.hash)               // order agnostic
+                            })
+                        } else {
+                            h *= EMPTY_FACTOR               // distance empty sets from containers of empty sets
                         }
                         break
                     // other type hashes are just the tcode
@@ -298,7 +331,7 @@ function type_set () {
             },
             equal_fn: function type_equal (type, args) {
                 // if (type.col > 3) {
-                //     // setting a breakpoint here is one way to inspect very large parsing jobs with collision problems
+                //     // a breakpoint here is one way to inspect very large parsing jobs with collision problems
                 //     console.log('collisions', type.col)
                 // }
                 if (type.tcode !== args[0]) {
@@ -306,7 +339,7 @@ function type_set () {
                 }
 
                 if (type.vals) {
-                    return type.vals.same_hashes(args[1])
+                    return same_vals(type, args[1])
                 }
 
                 return true
@@ -315,10 +348,43 @@ function type_set () {
                 if (prev) {
                     return prev
                 }
+                // var cycle0 = require('qb-cycle0')
+                // check for uncondensed arrays
+                // if (args[0] === TCODES.arr) {
+                //     var cyc = cycle0.cycle0(args[1])
+                //     if (cyc && args[1].length !== cyc) {
+                //         err("HERE")
+                //     }
+                // }
+
                 return new Type(hash, col, args[0], args[1])
-            }
+            },
+            // let null turn off validations
+            validate_args_fn: opt.validate_args_fn === undefined ? validate_type_args : opt.validate_args_fn,
+            validate_fn: opt.validate_fn === undefined ? validate_type : opt.validate_fn
         }
     )
+}
+
+function same_vals (type, vals) {
+    if (type.same_hashes) {
+        // multi-type and objects
+        return type.same_hashes(vals)
+    }
+    else {
+        // arrays
+        var tvals = type.vals
+        var tlen = tvals.length
+        if (tlen !== vals.length) {
+            return false
+        }
+        for (var i=0; i<tlen; i++) {
+            if ( tvals[i] !== vals[i] ) {
+                return false
+            }
+        }
+    }
+    return true
 }
 
 // function any_key (cache) {
@@ -330,7 +396,7 @@ function type_set () {
 
 function any_arr (cache) {
     if (!cache.ANY_ARR) {
-        var types = cache.all_types.hset()
+        var types = []
         // types.put(any_type(cache))
         cache.ANY_ARR = cache.all_types.put_create(TCODES.arr, types)
     }
@@ -370,6 +436,7 @@ function obj2type_info (obj, cache) {
 
     var custom_props = { $hash: 'hash', $col: 'col' }
 
+    // use old-school obj2typ which to normalize names and nesting.
     var info = typeobj.obj2typ(obj, {
         lookupfn: function (n) {
             var ret = cache.by_name[n]
@@ -404,9 +471,8 @@ function obj2type_info (obj, cache) {
                     ret = cache.all_types.put_create(TCODES.obj, fields)
                     break
                 case 'arr':
-                    var arrtypes = cache.all_types.hset()
-                    props.arr.forEach(function (v) { arrtypes.put(v) })
-                    ret = cache.all_types.put_create(TCODES.arr, arrtypes)
+                    // consider using cycle0 to normalize arrays
+                    ret = cache.all_types.put_create(TCODES.arr, props.arr)
                     break
                 case 'mul':
                     var mtypes = cache.all_types.hset()

@@ -38,11 +38,11 @@ test('obj2type', function (t) {
         [ [ {x: {a:'n',b:'s'}}, {x: {a:'n',b:'s',x:'s'}} ], [ {x: {a:'num',b:'str'}}, {x: {a:'num',b:'str',x:'str'}} ] ],
         [ { a: 'n' },                                       { a: 'num' } ],
         [ { a: 's', b: ['s', 'i'] },                        { a: 'str', b: ['str', 'int'] } ],
-        [ [ {a: 's'}, {a: 's'} ],                           [ {a: 'str'} ] ],
+        [ [ {a: 's'}, {a: 's'} ],                           [ {a: 'str'}, {a: 'str'} ] ],
         [ [ {a: 's'}, {a: 'n'} ],                           [ {a: 'str'}, {a: 'num'} ] ],
         [ [ {a: 's', b: 'n'}, {a: 's'} ],                   [ {a: 'str', b: 'num'}, {a: 'str'} ] ],
         [ [ {a: 's', b: 'n'}, ['s'] ],                      [ {a: 'str', b: 'num'}, ['str'] ] ],
-        [ [ 'n', 's', 'n' ],                                [ 'num', 'str' ] ],
+        [ [ 'n', 's', 'n' ],                                [ 'num', 'str', 'num' ] ],
         [ [ {$m: ['s','n']}, ['o'] ],                       [ {$mul: ['str','num']}, [{}] ] ],
     ], function (obj) {
         var info = tset.obj2type_info(obj)
@@ -51,22 +51,22 @@ test('obj2type', function (t) {
     } )
 })
 
-test('obj2type - uncombined fields', function (t) {
+test('obj2type - validations', function (t) {
     var all_keys = hmap.string_set()
+    var a_ctx = all_keys.put_create('a')
+
     var all_types = tset.type_set()
     var all_fields = tset.field_set()
 
     var str_t = all_types.put_create(TCODES.str)
     var num_t = all_types.put_create(TCODES.num)
 
-    var a_ctx = all_keys.put_create('a')
     var fields = all_types.hset()
-
     fields.put(all_fields.put_create(a_ctx, str_t))
     fields.put(all_fields.put_create(a_ctx, num_t))
-
-    var multi = all_types.put_create(TCODES.obj, fields)
-    t.throws(function () {multi.to_obj()}, /uncombined fields/ )
+    t.throws(function () {all_types.put_create(TCODES.obj, fields)}, /uncombined fields/)
+    var types2 = tset.type_set({validate_args_fn: null})    // turn off validation
+    types2.put_create(TCODES.obj, fields)
 
     t.end()
 })
