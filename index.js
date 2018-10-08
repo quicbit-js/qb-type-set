@@ -20,6 +20,12 @@ var tbase = require('qb1-type-base')
 var typeobj = require('qb1-type-obj')
 var TCODES = tbase.codes_by_all_names()
 var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
+var TYPES_BY_CODE = tbase.types_by_code()
+
+var tname = function (tcode, nprop) {
+    var t = TYPES_BY_CODE[tcode] || err('unknown tcode: ' + tcode)
+    return t[nprop || 'name']
+}
 
 var HALT = hmap.HALT
 var FIELD_SEED = 398591981
@@ -28,7 +34,8 @@ var LOG_COUNT = 0
 function log () {
     var args = Array.prototype.slice.call(arguments).map(function (v) { return format_arg(v) })
     args.unshift((LOG_COUNT++) + ': ')
-    console.log.apply(console, args)
+    process.stderr.write(args.join(' ') + '\n')
+    // console.log.apply(console, args)
 }
 
 function err (msg) { throw Error(msg) }
@@ -50,7 +57,6 @@ function format_arg (arg) {
         default:
             return arg
     }
-
 }
 
 function Field (hash, col, ctx, type) {
@@ -67,9 +73,9 @@ function validate_field (f) {
 
 Field.prototype = {
     constructor: Field,
-    to_obj: function () {
+    to_obj: function (opt) {
         var ret = {}
-        ret[this.ctx.to_obj()] = this.type.to_obj()
+        ret[this.ctx.to_obj()] = this.type.to_obj(opt)
         return ret
     }
 }
@@ -231,6 +237,17 @@ function create_new(tcode, new_vals, cache) {
     return cache.all_types.put_create(tcode, create_args)
 }
 
+function cycle_check_type (t, seen) {
+    !seen.get(t) || err('cycle detected')
+    seen.set(t, 1)
+    for_val(t.vals, function (c) {
+        if (c.vals) {
+            cycle_check_type(c, seen)
+        }
+    })
+    seen.delete(t)
+}
+
 function Type (hash, col, tcode, vals) {
     this.hash = hash
     this.col = col
@@ -257,30 +274,33 @@ Type.prototype = {
     is_empty: function () {
         return this.vals && this.vals.length === 0
     },
-    to_obj: function () {
+    has_cycle: function () {
+        return cycle_check_type(this, new Map())
+    },
+    to_obj: function (opt) {
         var ret
         switch (this.tcode) {
             case TCODES.arr:
                 ret = []
                 for_val(this.vals, function (v) {
-                    ret.push(v.to_obj())
+                    ret.push(v.to_obj(opt))
                 })
                 break
             case TCODES.obj:
                 ret = {}
                 this.vals.for_val(function (field) {
-                    ret[field.ctx.toString()] = field.type.to_obj()
+                    ret[field.ctx.toString()] = field.type.to_obj(opt)
                 })
                 break
             case TCODES.mul:
                 var mtypes = []
                 this.vals.for_val(function (v) {
-                    mtypes.push(v.to_obj())
+                    mtypes.push(v.to_obj(opt))
                 })
                 ret = mtypes.length === 1 ? mtypes[0] : { $mul: mtypes }
                 break
             default:
-                ret = TCODE_NAMES[this.tcode]
+                ret = tname(this.tcode, opt && opt.name_prop)
         }
         return ret
     }
@@ -433,8 +453,6 @@ function obj2type_info (obj, cache) {
     cache.all_types = cache.all_types || type_set()
     cache.all_fields = cache.all_fields || field_set()
 
-    var custom_props = { $hash: 'hash', $col: 'col' }
-
     // use old-school obj2typ which to normalize names and nesting.
     var info = typeobj.obj2typ(obj, {
         lookupfn: function (n) {
@@ -484,7 +502,7 @@ function obj2type_info (obj, cache) {
             }
             return ret
         },
-        custom_props: custom_props,
+        custom_props: { $hash: 'hash', $col: 'col' },
     })
     info.cache = cache
     return info
