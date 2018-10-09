@@ -40,23 +40,21 @@ function log () {
 
 function err (msg) { throw Error(msg) }
 function format_arg (arg) {
-    if (arg == null) {
-        return arg
+    var ret = arg
+    if (arg != null && typeof arg === 'object') {
+        if (Array.isArray(arg)) {
+            ret = '[' + arg.map(function (v) {
+                return format_arg(v)
+            }).join(', ') + ']'
+        } else if (typeof arg.to_obj === 'function') {
+            ret = JSON.stringify(tformat(arg.to_obj()))
+        }
+        else {
+            ret = JSON.stringify(tformat(arg))
+        }
     }
-    switch (typeof arg) {
-        case 'object':
-            if (Array.isArray(arg)) {
-                return '[' + arg.map(function (v) { return format_arg(v) }).join(', ') + ']'
-            }
-            if (typeof arg.to_obj === 'function') {
-                return JSON.stringify(tformat(arg.to_obj()))
-            }
-            return JSON.stringify(tformat(arg))
-        case 'string':
-            return arg
-        default:
-            return arg
-    }
+    if (ret.length > 200) ret = ret.slice(0, 200)
+    return ret
 }
 
 function Field (hash, col, ctx, type) {
@@ -333,7 +331,6 @@ function type_set (opt) {
                             h *= EMPTY_FACTOR               // distance empty sets from containers of empty sets
                         }
                         break
-                        break
                     case TCODES.obj:
                     case TCODES.mul:
                         h = h * TCODE_FACTOR                // create greater seed difference for object/array/other
@@ -386,9 +383,9 @@ function type_set (opt) {
 }
 
 function same_vals (type, vals) {
-    if (type.same_hashes) {
+    if (type.vals.same_hashes) {
         // multi-type and objects
-        return type.same_hashes(vals)
+        return type.vals.same_hashes(vals)
     }
     else {
         // arrays
