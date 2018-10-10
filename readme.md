@@ -1,3 +1,3 @@
 # qb-type-set
 
-Support storing qb-types in a fast-lookup (hahsed) set that ignores field order, backed by qb-hmap.
+High performance sets of quicbit types (backed by [qb-hmap](https://github.com/quicbit-js/qb-hmap)).

@@ -17,9 +17,8 @@
 var tformat = require('qb-type-format')
 var hmap = require('qb-hmap')
 var tbase = require('qb1-type-base')
-var typeobj = require('qb1-type-obj')
+var qb1_obj2type = require('qb1-obj2type')
 var TCODES = tbase.codes_by_all_names()
-var TCODE_NAMES = Object.keys(TCODES).reduce(function (a, n) { a[TCODES[n]] = n; return a }, [])
 var TYPES_BY_CODE = tbase.types_by_code()
 
 var tname = function (tcode, nprop) {
@@ -451,7 +450,7 @@ function obj2type_info (obj, cache) {
     cache.all_fields = cache.all_fields || field_set()
 
     // use old-school obj2typ which to normalize names and nesting.
-    var info = typeobj.obj2typ(obj, {
+    var info = qb1_obj2type(obj, {
         lookupfn: function (n) {
             var ret = cache.by_name[n]
             if (!ret) {

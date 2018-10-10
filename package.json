@@ -1,7 +1,7 @@
 {
   "name": "qb-type-set",
   "version": "1.0.0",
-  "description": "qb-type-set",
+  "description": "High performance sets of quicbit types",
   "homepage": "https://github.com/quicbit-js/qb-type-set",
   "url": "https://github.com/quicbit-js/qb-type-set/issues",
   "email": "support@quicbit.com",
@@ -9,11 +9,11 @@
   "devDependencies": {
     "qb-cycle0": "^1.0.0",
     "qb-hmap": "^1.0.0",
-    "qb1-type-base": "^1.0.0",
     "qb-type-format": "^1.0.0",
-    "qb1-type-obj": "^1.0.0",
+    "qb1-obj2type": "^1.0.0",
+    "qb1-type-base": "^1.0.0",
     "tape": "^4.9.1",
-    "test-kit": "^2.7.2"
+    "test-kit": "^2.8.6"
   },
   "scripts": {
     "test": "tape test.js",
