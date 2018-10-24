@@ -56,9 +56,10 @@ function format_arg (arg) {
     return ret
 }
 
+// a hashed composite of type and context. (stored in Type.vals)
 function Field (hash, col, ctx, type) {
-    this.hash = hash
-    this.col = col
+    this.hash = hash            // hash (of type and ctx)
+    this.col = col              // collision (in master set)
     this.ctx = ctx
     this.type = type
     this.count = 0
@@ -138,8 +139,6 @@ function validate_obj_vals (fields) {
     })
 
 }
-
-var TCOUNT = 0
 
 function find_df (parent, fn, path) {
     var found = null
@@ -245,11 +244,12 @@ function cycle_check_type (t, seen) {
     seen.delete(t)
 }
 
+var TCOUNT = 0
 function Type (hash, col, tcode, vals) {
-    this.hash = hash
-    this.col = col
+    this.hash = hash            // hash (of tcode and vals)
+    this.col = col              // collision (in master set)
     this.tcode = tcode
-    this.vals = vals
+    this.vals = vals            // for object: [field], for array: [type]
     this.count = ++TCOUNT
 }
 
