@@ -216,7 +216,7 @@ function create_new(tcode, new_vals, cache) {
                 return new_vals[0]
             }
             create_args = cache.all_types.hset()
-            new_vals.forEach(function (type) { create_args.put([type])})
+            new_vals.forEach(function (type) { create_args.put(type)})
             break
         case TCODES.obj:
             create_args = cache.all_fields.hset()
