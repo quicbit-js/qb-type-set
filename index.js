@@ -65,8 +65,8 @@ function Field (hash, col, ctx, type) {
     this.count = 0
 }
 
-function validate_field (f) {
-
+function prep_field (f) {
+    return f
 }
 
 Field.prototype = {
@@ -78,7 +78,7 @@ Field.prototype = {
     }
 }
 
-// use put_create (ctx, type) to populate
+// use put (ctx, type) to populate
 function field_set (opt) {
     opt = opt || {}
     return hmap.set({
@@ -88,22 +88,17 @@ function field_set (opt) {
         equal_fn: function field_equal (field, args) {
             return field.ctx === args[0] && field.type === args[1]
         },
-        create_fn: function field_create (hash, col, prev, args) {
+        put_merge_fn: function field_create (hash, col, prev, args) {
             if (prev) {
                 return prev
             }
             return new Field(hash, col, args[0], args[1])
         },
-        validate_fn: opt.validate_fn === undefined ? validate_field : opt.validate_fn,
-        validate_args_fn: opt.validate_args_fn
+        prep_fn: opt.prep_fn === undefined ? prep_field : opt.prep_fn,
     })
 }
 
-function validate_type (t) {
-    t.constructor.name === Type || err('invalid type ' + t)
-}
-
-function validate_type_args (args) {
+function prep_type (args) {
     var tcode = args[0]
     var vals = args[1]
     typeof tcode === 'number' || err('bad tcode')
@@ -115,6 +110,7 @@ function validate_type_args (args) {
             validate_arr_vals(vals)
             break
     }
+    return args
 }
 
 function validate_arr_vals (vals) {
@@ -127,17 +123,16 @@ function validate_obj_vals (fields) {
         return
     }
     var all_fields = fields.master
-    var all_keys = all_fields.map.key_set
+    var all_keys = all_fields.map.master
 
     var contexts = all_keys.hset()
     fields.for_val(function (f) {
-        f.constructor === Field || err('invalid object field' )
+        f.constructor === Field || err('invalid object field')
         if (contexts.get(f.ctx)) {
             err('uncombined fields for context: ' + f.ctx.toString())
         }
         contexts.put(f.ctx)
     })
-
 }
 
 function find_df (parent, fn, path) {
@@ -221,16 +216,16 @@ function create_new(tcode, new_vals, cache) {
                 return new_vals[0]
             }
             create_args = cache.all_types.hset()
-            create_args.put_all(new_vals)
+            new_vals.forEach(function (type) { create_args.put([type])})
             break
         case TCODES.obj:
             create_args = cache.all_fields.hset()
             new_vals.forEach(function (ctx_type) {
-                create_args.put(cache.all_fields.put_create(ctx_type[0], ctx_type[1]))
+                create_args.put(cache.all_fields.put(ctx_type))
             })
             break
     }
-    return cache.all_types.put_create(tcode, create_args)
+    return cache.all_types.put([tcode, create_args])
 }
 
 function cycle_check_type (t, seen) {
@@ -308,7 +303,7 @@ var EMPTY_FACTOR = 402537
 
 var for_val = hmap.for_val
 
-// use put_create(tcode, values) to populate where values depends on tcode:
+// use put(tcode, values) to populate where values depends on tcode:
 //    obj: hset of unique fields
 //    arr: array of cycling types, i.e. [ n, s ] means [ n, s, n, s, ... ]
 //    mul: hset of unique types
@@ -360,7 +355,7 @@ function type_set (opt) {
 
                 return true
             },
-            create_fn: function type_create (hash, col, prev, args) {
+            put_merge_fn: function type_create (hash, col, prev, args) {
                 if (prev) {
                     return prev
                 }
@@ -375,8 +370,7 @@ function type_set (opt) {
                 return new Type(hash, col, args[0], args[1])
             },
             // let null turn off validations
-            validate_args_fn: opt.validate_args_fn === undefined ? validate_type_args : opt.validate_args_fn,
-            validate_fn: opt.validate_fn === undefined ? validate_type : opt.validate_fn
+            prep_fn: opt.prep_fn === undefined ? prep_type : opt.prep_fn
         }
     )
 }
@@ -413,7 +407,7 @@ function any_arr (cache) {
     if (!cache.ANY_ARR) {
         var types = []
         // types.put(any_type(cache))
-        cache.ANY_ARR = cache.all_types.put_create(TCODES.arr, types)
+        cache.ANY_ARR = cache.all_types.put([TCODES.arr, types])
     }
     return cache.ANY_ARR
 }
@@ -423,15 +417,15 @@ function any_obj (cache) {
         var fields = cache.all_fields.hset()
         // types.put(any_type(cache))
         // var fields = field_set()
-        // fields.put(cache.all_fields.put_create(any_key(cache), any_type(cache)))
-        cache.ANY_OBJ = cache.all_types.put_create(TCODES.obj, fields)
+        // fields.put(cache.all_fields.put(any_key(cache), any_type(cache)))
+        cache.ANY_OBJ = cache.all_types.put([TCODES.obj, fields])
     }
     return cache.ANY_OBJ
 }
 
 // function any_type (cache) {
 //     if (!cache.ANY_TYPE) {
-//         cache.ANY_TYPE = cache.all_types.put_create(TCODES.any)
+//         cache.ANY_TYPE = cache.all_types.put(TCODES.any)
 //     }
 //     return cache.ANY_TYPE
 // }
@@ -463,8 +457,7 @@ function obj2type_info (obj, cache) {
                         ret = any_arr(cache)
                         break
                     default:
-                        ret = cache.all_types.put_create(tcode)
-
+                        ret = cache.all_types.put([tcode])
                 }
                 cache.by_name[n] = ret
             }
@@ -476,25 +469,25 @@ function obj2type_info (obj, cache) {
                 case 'obj':
                     var fields = cache.all_fields.hset()
                     Object.keys(props.obj).forEach(function (k) {
-                        var ctx = cache.all_keys.put_create(k)
+                        var ctx = cache.all_keys.put(k)
                         var type = props.obj[k]
-                        var field = cache.all_fields.put_create(ctx, type)
+                        var field = cache.all_fields.put([ctx, type])
                         fields.put(field)
                     })
-                    ret = cache.all_types.put_create(TCODES.obj, fields)
+                    ret = cache.all_types.put([TCODES.obj, fields])
                     break
                 case 'arr':
                     // I considered consolidating array values here, but that
                     // can corrupt cycles like [ n, s, n ] -> [ n, s ]... not the same
-                    ret = cache.all_types.put_create(TCODES.arr, props.arr)
+                    ret = cache.all_types.put([TCODES.arr, props.arr])
                     break
                 case 'mul':
                     var mtypes = cache.all_types.hset()
                     props.mul.forEach(function (v) { mtypes.put(v) })
-                    ret = cache.all_types.put_create(TCODES.mul, mtypes)
+                    ret = cache.all_types.put([TCODES.mul, mtypes])
                     break
                 default:
-                    ret = cache.all_types.put_create(props.base)
+                    ret = cache.all_types.put([props.base])
             }
             return ret
         },

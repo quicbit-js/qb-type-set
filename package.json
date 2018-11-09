@@ -6,12 +6,15 @@
   "url": "https://github.com/quicbit-js/qb-type-set/issues",
   "email": "support@quicbit.com",
   "repository": "quicbit-js/qb-type-set",
+  "dependencies": {
+    "qb-extend-flat": "^2.0.2"
+  },
   "devDependencies": {
-    "qb-cycle0": "^1.0.0",
-    "qb-hmap": "^1.0.0",
-    "qb-type-format": "^1.0.0",
-    "qb1-obj2type": "^1.0.0",
-    "qb1-type-base": "^1.0.0",
+    "qb-cycle0": "file:../qb-cycle0",
+    "qb-hmap": "file:../qb-hmap",
+    "qb-type-format": "file:../qb-type-format",
+    "qb1-obj2type": "file:../qb1-obj2type",
+    "qb1-type-base": "file:../qb1-type-base",
     "tape": "^4.9.1",
     "test-kit": "^2.8.6"
   },
@@ -34,8 +37,5 @@
     "test.js"
   ],
   "author": "Matthew Voss",
-  "license": "ISC",
-  "dependencies": {
-    "qb-extend-flat": "^2.0.2"
-  }
+  "license": "ISC"
 }

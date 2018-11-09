@@ -33,8 +33,8 @@ function check_collisions (cache) {
 test('obj2type', function (t) {
     t.table_assert([
         [ 'obj',                                            'exp' ],
-        [ [ {$m: ['s','n']}, 'a' ],                         [ {$mul: ['str','num']}, [] ] ],
-        [ [],                                               [] ],
+        // [ [ {$m: ['s','n']}, 'a' ],                         [ {$mul: ['str','num']}, [] ] ],
+        // [ [],                                               [] ],
         [ [ {x: {a:'n',b:'s'}}, {x: {a:'n',b:'s',x:'s'}} ], [ {x: {a:'num',b:'str'}}, {x: {a:'num',b:'str',x:'str'}} ] ],
         [ { a: 'n' },                                       { a: 'num' } ],
         [ { a: 's', b: ['s', 'i'] },                        { a: 'str', b: ['str', 'int'] } ],
@@ -53,20 +53,20 @@ test('obj2type', function (t) {
 
 test('obj2type - validations', function (t) {
     var all_keys = hmap.string_set()
-    var a_ctx = all_keys.put_create('a')
+    var a_ctx = all_keys.put('a')
 
     var all_types = tset.type_set()
     var all_fields = tset.field_set()
 
-    var str_t = all_types.put_create(TCODES.str)
-    var num_t = all_types.put_create(TCODES.num)
+    var str_t = all_types.put([TCODES.str])
+    var num_t = all_types.put([TCODES.num])
 
     var fields = all_types.hset()
-    fields.put(all_fields.put_create(a_ctx, str_t))
-    fields.put(all_fields.put_create(a_ctx, num_t))
-    t.throws(function () {all_types.put_create(TCODES.obj, fields)}, /uncombined fields/)
-    var types2 = tset.type_set({validate_args_fn: null})    // turn off validation
-    types2.put_create(TCODES.obj, fields)
+    fields.put(all_fields.put([a_ctx, str_t]))
+    fields.put(all_fields.put([a_ctx, num_t]))
+    t.throws(function () {all_types.put([TCODES.obj, fields])}, /uncombined fields/)
+    var types2 = tset.type_set({prep_fn: null})    // turn off validation
+    types2.put([TCODES.obj, fields])
 
     t.end()
 })
