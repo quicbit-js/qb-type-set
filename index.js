@@ -443,7 +443,7 @@ function obj2type_info (obj, cache) {
     cache.all_types = cache.all_types || type_set()
     cache.all_fields = cache.all_fields || field_set()
 
-    // use old-school obj2typ which to normalize names and nesting.
+    // use old-school obj2typ to normalize names and nesting.
     var info = qb1_obj2type(obj, {
         lookupfn: function (n) {
             var ret = cache.by_name[n]
@@ -498,8 +498,6 @@ function obj2type_info (obj, cache) {
 }
 
 module.exports = {
-    // type_map: type_map,
-    // field_map: field_map,
     log: log,
     obj2type: obj2type,
     obj2type_info: obj2type_info,
